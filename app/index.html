@@ -2,138 +2,91 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>VLC Cast</title>
-<script src="$WEBAPIS/webapis/webapis.js"></script>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#080b12;color:#f5f7fb;font-family:Arial, sans-serif}
-body{padding:4vh 5vw}.wrap{max-width:1200px;margin:auto}
-h1{font-size:42px;margin:0 0 10px}p{color:#aebbd0;font-size:20px}
-label{display:block;margin:18px 0 8px;font-size:18px;color:#dce5f7}
-input{width:100%;padding:15px 17px;font-size:22px;color:#fff;background:#171f2e;border:2px solid #44516a;border-radius:8px}
-button{font-size:20px;padding:14px 22px;border:2px solid #5e7193;border-radius:8px;background:#1c2a40;color:#fff;margin:10px 10px 0 0}
-button:focus,input:focus{outline:3px solid #76aaff;border-color:#76aaff}
-.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.status{margin-top:18px;padding:15px;background:#141b28;border-radius:8px;min-height:60px;font-size:18px;white-space:pre-wrap}
-.help{font-size:16px;line-height:1.5}.muted{color:#8391a8}
-#player{display:none}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:#10131a;color:#f7f8fc;font:24px Arial,sans-serif;overflow:auto}
+body{padding:3vh 4vw}
+h1{font-size:38px;margin:0 0 12px;color:#70b7ff}
+p{font-size:19px;color:#c8d2e2}
+label{display:block;margin:18px 0 8px}
+input,button{font:inherit;border-radius:10px;border:3px solid #66758a;padding:15px 18px;min-height:60px}
+input{width:100%;background:#202735;color:#fff}
+button{background:#263e5c;color:#fff;margin:6px 5px 6px 0;min-width:150px;cursor:pointer}
+button:focus,input:focus,.focused{outline:5px solid #ffdc4d!important;outline-offset:3px;border-color:#ffdc4d!important}
+#status{padding:12px;background:#202735;border-radius:8px;min-height:48px;overflow-wrap:anywhere}
+.small{font-size:16px;color:#aab7c9}
 </style>
 </head>
 <body>
-<div class="wrap">
 <h1>VLC Cast</h1>
-<p>Потоковое видео из домашней сети</p>
-<label for="server">Адрес сервера на компьютере</label>
-<input id="server" value="http://192.168.1.20:8765" spellcheck="false">
-<div class="row"><button id="save">Сохранить адрес</button><button id="refresh">Обновить ссылку</button></div>
-<label for="url">Или вставь прямую ссылку на поток</label>
-<input id="url" placeholder="https://…/stream.m3u8" spellcheck="false">
-<div class="row">
+<p>Введите прямую сетевую ссылку на видео или поток. Выберите поле стрелками пульта, нажмите OK для ввода.</p>
+<label for="url">URL потока</label>
+<input id="url" type="text" value="" placeholder="https://... или http://...">
+<div>
 <button id="play">▶ Воспроизвести</button>
 <button id="pause">⏯ Пауза / продолжить</button>
-<button id="back">↶ −30 сек</button>
-<button id="forward">+30 сек ↷</button>
 <button id="stop">■ Стоп</button>
 </div>
-<div id="status" class="status">Готов. Сначала сохрани адрес компьютера или введи URL потока.</div>
-<p class="help">Пульт: OK — выбрать элемент; MediaPlayPause — пауза; стрелки ←/→ — перемотка на 30 секунд; Back — остановить видео/вернуться.</p>
-<p class="help muted">Воспроизводятся только потоки, совместимые с плеером Samsung. Ссылки с DRM, авторизацией или специальными заголовками могут не работать.</p>
+<div>
+<button id="load">↓ Загрузить URL с ПК</button>
+<button id="refresh">↻ Проверить сервер</button>
 </div>
+<p id="status" role="status">IP компьютера: 192.168.1.119:8765</p>
+<p class="small">Стрелки — выбор элемента. OK/Enter — действие. Back — предыдущий экран. Если загрузка URL с ПК не работает, введите ссылку вручную.</p>
 <script>
 (function(){
-'use strict';
-var $=function(id){return document.getElementById(id);};
-var serverInput=$('server'), urlInput=$('url'), status=$('status');
-var serverBase='http://192.168.1.20:8765';
-var playing=false, lastRevision=0, pollHandle=null;
-function say(s){status.textContent=s;}
-function normalizeBase(s){return s.trim().replace(/\/+$/,'');}
-function validHttpUrl(s){return /^https?:\/\/[^ ]+/i.test(s);}
-function av(){return window.webapis && webapis.avplay;}
-function openPlayer(url){
-  if(!validHttpUrl(url)){say('Ошибка: нужен прямой URL, начинающийся с http:// или https://');return;}
-  if(!av()){say('AVPlay недоступен. Убедись, что приложение открыто внутри TizenBrew на Samsung TV.');return;}
-  try{
-    try{av().close();}catch(ignore){}
-    av().open(url);
-    av().setDisplayRect(0,0,window.innerWidth||1920,window.innerHeight||1080);
-    if(av().setDisplayMethod) av().setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
-    av().setListener({
-      onbufferingstart:function(){say('Буферизация…');},
-      onbufferingprogress:function(p){say('Буферизация: '+p+'%');},
-      onbufferingcomplete:function(){say('Буферизация завершена.');},
-      onstreamcompleted:function(){playing=false;say('Поток завершён.');},
-      onerror:function(e){playing=false;say('Ошибка AVPlay: '+e);},
-      onerrormsg:function(msg){say('Ошибка потока: '+msg);}
-    });
-    av().prepareAsync(function(){
-      try{av().play();playing=true;say('Воспроизведение запущено. Нажми MediaPlayPause для паузы.');}
-      catch(e){say('Не удалось начать воспроизведение: '+e.message);}
-    },function(e){say('Не удалось подготовить поток: '+(e.message||e));});
-  }catch(e){say('Ошибка запуска AVPlay: '+(e.message||e));}
-}
-function pauseToggle(){
-  if(!av()||!playing){say('Сейчас нет активного видео.');return;}
-  try{
-    var state=av().getState();
-    if(state==='PLAYING'){av().pause();say('Пауза.');}
-    else if(state==='PAUSED'){av().play();say('Воспроизведение.');}
-    else say('Состояние плеера: '+state);
-  }catch(e){say('Ошибка паузы: '+e.message);}
-}
-function seek(delta){
-  if(!av()||!playing){say('Нет активного видео для перемотки.');return;}
-  try{
-    var t=av().getCurrentTime(), d=av().getDuration();
-    var target=Math.max(0,Math.min(d>0?d:t+delta*1000,t+delta*1000));
-    av().seekTo(target,function(){say('Позиция: '+Math.floor(target/1000)+' сек.');},function(e){say('Перемотка не поддерживается: '+(e.message||e));});
-  }catch(e){say('Не удалось перемотать: '+e.message);}
-}
-function stop(){
-  try{if(av())av().close();}catch(ignore){}
-  playing=false;say('Воспроизведение остановлено.');
-}
-function saveServer(){
-  var s=normalizeBase(serverInput.value);
-  if(!/^http:\/\/[^/]+(?::\d+)?$/i.test(s)){
-    say('Укажи адрес компьютера в формате http://192.168.1.20:8765');return;
-  }
-  serverBase=s;serverInput.value=s;
-  try{localStorage.setItem('vlccast-server',s);}catch(ignore){}
-  say('Адрес сервера сохранён: '+s);
-}
-function refreshUrl(){
-  serverBase=normalizeBase(serverInput.value||serverBase);
-  say('Запрашиваю ссылку с компьютера…');
-  fetch(serverBase+'/api/state',{cache:'no-store'}).then(function(r){
-    if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
-  }).then(function(d){
-    if(!d.url){say('На компьютере ещё не задана ссылка. Открой панель сервера и отправь URL.');return;}
-    urlInput.value=d.url;lastRevision=d.revision||lastRevision;
-    say('Получена ссылка: '+(d.title||d.url));
-    openPlayer(d.url);
-  }).catch(function(e){
-    say('Не удалось подключиться к серверу: '+e.message+'. Проверь IP, порт 8765 и брандмауэр Windows.');
+  'use strict';
+  var PC_IP = '192.168.1.119';
+  var BASE = 'http://' + PC_IP + ':8765';
+  var url = document.getElementById('url');
+  var status = document.getElementById('status');
+  var focusables = Array.prototype.slice.call(document.querySelectorAll('input,button'));
+  var current = 0;
+  function say(t){status.textContent=t;}
+  function focusAt(i){current=(i+focusables.length)%focusables.length;focusables[current].focus();}
+  // Explicit TV remote navigation, even when the browser doesn't move focus by itself.
+  document.addEventListener('keydown',function(e){
+    var k=e.keyCode||e.which;
+    if(k===37||k===38||k===39||k===40){
+      // Let arrows edit/move caret when the URL field itself is focused.
+      if(document.activeElement===url && (k===37||k===39)) return;
+      e.preventDefault();
+      if(k===38||k===37) focusAt(current-1); else focusAt(current+1);
+    } else if(k===13){
+      // Native Enter on focused controls is normally enough; don't double-trigger.
+      if(document.activeElement===document.body){e.preventDefault();focusAt(current);}
+    } else if(k===10009 || k===27){
+      // Samsung RETURN: leave handling to Tizen where possible.
+      try{if(window.tizen&&tizen.application)tizen.application.getCurrentApplication().hide();}catch(_){}
+    } else if(k===415){e.preventDefault();play();}
+      else if(k===19){e.preventDefault();pause();}
+      else if(k===413){e.preventDefault();stop();}
   });
-}
-$('save').addEventListener('click',saveServer);
-$('refresh').addEventListener('click',refreshUrl);
-$('play').addEventListener('click',function(){openPlayer(urlInput.value.trim());});
-$('pause').addEventListener('click',pauseToggle);
-$('back').addEventListener('click',function(){seek(-30);});
-$('forward').addEventListener('click',function(){seek(30);});
-$('stop').addEventListener('click',stop);
-try{var old=localStorage.getItem('vlccast-server');if(old){serverBase=old;serverInput.value=old;}}catch(ignore){}
-document.addEventListener('keydown',function(e){
-  if(e.keyCode===MediaPlayPauseKey()){e.preventDefault();pauseToggle();}
-  else if(e.keyCode===37 && document.activeElement!==urlInput && document.activeElement!==serverInput){e.preventDefault();seek(-30);}
-  else if(e.keyCode===39 && document.activeElement!==urlInput && document.activeElement!==serverInput){e.preventDefault();seek(30);}
-  else if(e.keyCode===MediaStopKey()){e.preventDefault();stop();}
-  else if(e.keyCode===10009){if(playing){stop();e.preventDefault();}}
-});
-function MediaPlayPauseKey(){return 10252;}
-function MediaStopKey(){return 413;}
+  focusables.forEach(function(el,i){el.addEventListener('focus',function(){current=i;});});
+  function avplay(){return window.webapis&&webapis.avplay?webapis.avplay:null;}
+  function play(){
+    var a=avplay(), u=url.value.trim();
+    if(!u){say('Сначала введите URL потока.');url.focus();return;}
+    if(!/^https?:\/\//i.test(u) && !/^rtsp:\/\//i.test(u)){say('URL должен начинаться с http://, https:// или rtsp://');return;}
+    if(!a){say('На этой странице не найден webapis.avplay. Возможно, модуль открыт в браузере TizenBrew без доступа к AVPlay.');return;}
+    try{a.open(u);a.setDisplayRect(0,0,1920,1080);a.prepareAsync(function(){try{a.play();say('Воспроизведение запущено.');}catch(e){say('Ошибка play: '+e.message);}},function(e){say('Ошибка подготовки потока: '+(e.message||e));});}
+    catch(e){say('Ошибка AVPlay: '+e.message);}
+  }
+  function pause(){var a=avplay();if(!a){say('AVPlay недоступен на этой странице.');return;}try{if(a.getState()==='PLAYING')a.pause();else a.play();say('Команда паузы/продолжения отправлена.');}catch(e){say('Ошибка паузы: '+e.message);}}
+  function stop(){var a=avplay();if(!a){say('AVPlay недоступен на этой странице.');return;}try{a.stop();say('Воспроизведение остановлено.');}catch(e){say('Ошибка остановки: '+e.message);}}
+  async function loadUrl(){
+    try{say('Подключаюсь к ПК '+BASE+' …');var r=await fetch(BASE+'/api/state',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);var d=await r.json();if(!d.url)throw Error('На ПК пока не задан URL');url.value=d.url;say('URL загружен с ПК. Нажмите «Воспроизвести».');}
+    catch(e){say('Не удалось получить URL с ПК: '+e.message+'. Возможна блокировка HTTP-запроса из HTTPS-страницы или проблема сети. Введите URL вручную.');}
+  }
+  async function health(){try{var r=await fetch(BASE+'/api/health',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);var d=await r.json();say('Сервер ПК доступен: '+BASE+' ('+d.status+').');}catch(e){say('Нет связи с '+BASE+'. Проверьте IP, запуск сервера и брандмауэр Windows. '+e.message);}}
+  document.getElementById('play').addEventListener('click',play);
+  document.getElementById('pause').addEventListener('click',pause);
+  document.getElementById('stop').addEventListener('click',stop);
+  document.getElementById('load').addEventListener('click',loadUrl);
+  document.getElementById('refresh').addEventListener('click',health);
+  focusAt(0);
 })();
 </script>
-</body>
-</html>
+</body></html>

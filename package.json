@@ -1,16 +1,10 @@
 {
-  "name": "vlc-cast-tizenbrew",
-  "version": "0.1.0",
-  "description": "Local-network stream receiver for Samsung Tizen TVs",
+  "name": "vlc-cast-tizen",
+  "version": "0.2.0",
+  "description": "Local network stream receiver for Samsung Tizen TVs",
   "packageType": "app",
   "appName": "VLC Cast",
   "appPath": "app/index.html",
-  "keys": [
-    "MediaPlayPause",
-    "MediaFastForward",
-    "MediaRewind",
-    "ColorF0Red",
-    "ColorF1Green"
-  ],
+  "keys": ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaStop", "MediaFastForward", "MediaRewind", "ColorF0Red", "ColorF1Green"],
   "evaluateScriptOnDocumentStart": false
 }
